@@ -1,0 +1,2084 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM Pipeline: Text → Vocabulary → Tokens → Embeddings → 3D Model</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              200: '#c7d2fe',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              900: '#1e1b4b',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Three.js and OrbitControls -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+  <style>
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(241, 245, 249, 0.8);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.5);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(99, 102, 241, 0.6);
+    }
+
+    /* Light Theme Glassmorphism */
+    .light .glass-panel {
+      background: rgba(255, 255, 255, 0.88);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(226, 232, 240, 0.95);
+      box-shadow: 0 4px 20px -2px rgba(99, 102, 241, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.02);
+    }
+    .light .glass-panel-subtle {
+      background: rgba(248, 250, 252, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(226, 232, 240, 0.8);
+    }
+    .light .glass-input {
+      background: #ffffff;
+      border: 1px solid rgba(203, 213, 225, 0.9);
+      color: #0f172a;
+    }
+    .light .glass-input:focus {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+
+    /* Dark Theme Fallback */
+    .dark .glass-panel {
+      background: rgba(13, 17, 38, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(99, 102, 241, 0.2);
+    }
+    .dark .glass-panel-subtle {
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .dark .glass-input {
+      background: rgba(10, 14, 30, 0.85);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      color: #f8fafc;
+    }
+
+    /* Range slider styling */
+    input[type=range] {
+      accent-color: #6366f1;
+    }
+
+    /* Subtle pulse animation */
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.15); opacity: 0.3; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    .animate-pulse-ring {
+      animation: pulse-ring 2s infinite ease-in-out;
+    }
+  </style>
+</head>
+
+<body class="bg-gradient-to-br from-slate-50 via-indigo-50/25 to-sky-50 text-slate-800 font-sans min-h-screen flex flex-col overflow-x-hidden antialiased transition-colors duration-300">
+
+  <!-- ================= TOP NAVIGATION BAR ================= -->
+  <header class="border-b border-slate-200/90 bg-white/85 backdrop-blur-md sticky top-0 z-40 px-4 py-2.5 shadow-xs">
+    <div class="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-3">
+      
+      <!-- Brand & Pipeline Header -->
+      <div class="flex items-center gap-3">
+        <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-500 p-[1.5px] shadow-md shadow-indigo-500/20">
+          <div class="h-full w-full bg-white rounded-[10px] flex items-center justify-center">
+            <svg class="w-5 h-5 text-indigo-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m9-5.25v9" />
+            </svg>
+          </div>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base font-extrabold bg-gradient-to-r from-slate-900 via-indigo-900 to-indigo-700 bg-clip-text text-transparent">
+              LLM Pipeline: Text → Vocab → Token → Embedding → 3D
+            </h1>
+            <span class="px-2 py-0.5 text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full shadow-2xs">
+              Bright Edition
+            </span>
+          </div>
+          <p class="text-xs text-slate-500 font-medium">
+            Interactive 3D Semantic Vector Space & Cosine Similarity Engine
+          </p>
+        </div>
+      </div>
+
+      <!-- Pipeline Steps Flow Badges -->
+      <div class="hidden md:flex items-center gap-1.5 text-xs bg-slate-100/90 px-3 py-1.5 rounded-xl border border-slate-200/80 shadow-2xs font-medium">
+        <div class="flex items-center gap-1 text-indigo-700 font-semibold">
+          <span class="w-4 h-4 rounded-full bg-indigo-600 text-white text-[10px] flex items-center justify-center font-bold">1</span>
+          <span>Text</span>
+        </div>
+        <span class="text-slate-400">→</span>
+        <div class="flex items-center gap-1 text-purple-700 font-semibold">
+          <span class="w-4 h-4 rounded-full bg-purple-600 text-white text-[10px] flex items-center justify-center font-bold">2</span>
+          <span>Tokens</span>
+        </div>
+        <span class="text-slate-400">→</span>
+        <div class="flex items-center gap-1 text-cyan-700 font-semibold">
+          <span class="w-4 h-4 rounded-full bg-cyan-600 text-white text-[10px] flex items-center justify-center font-bold">3</span>
+          <span>Vocab</span>
+        </div>
+        <span class="text-slate-400">→</span>
+        <div class="flex items-center gap-1 text-emerald-700 font-semibold">
+          <span class="w-4 h-4 rounded-full bg-emerald-600 text-white text-[10px] flex items-center justify-center font-bold">4</span>
+          <span>24D Vector</span>
+        </div>
+        <span class="text-slate-400">→</span>
+        <div class="flex items-center gap-1 text-amber-700 font-semibold">
+          <span class="w-4 h-4 rounded-full bg-amber-500 text-white text-[10px] flex items-center justify-center font-bold">5</span>
+          <span>3D Space</span>
+        </div>
+        <span class="text-slate-400">→</span>
+        <div class="flex items-center gap-1 text-rose-700 font-semibold">
+          <span class="w-4 h-4 rounded-full bg-rose-600 text-white text-[10px] flex items-center justify-center font-bold">6</span>
+          <span>Similarity</span>
+        </div>
+      </div>
+
+      <!-- Quick Metrics & Bright/Dark Mode Switcher -->
+      <div class="flex items-center gap-2 text-xs">
+        <div class="glass-panel-subtle px-2.5 py-1 rounded-lg flex items-center gap-1.5 text-slate-700 shadow-2xs font-medium">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span>Tokens: <strong id="header-token-count" class="text-slate-900 font-mono font-bold">0</strong></span>
+        </div>
+        <div class="glass-panel-subtle px-2.5 py-1 rounded-lg flex items-center gap-1.5 text-slate-700 shadow-2xs font-medium">
+          <span class="w-2 h-2 rounded-full bg-cyan-500"></span>
+          <span>Vocab: <strong id="header-vocab-count" class="text-slate-900 font-mono font-bold">0</strong></span>
+        </div>
+
+        <!-- Bright / Dark Mode Toggle Button -->
+        <button id="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Bright / Dark UI Mode"
+          class="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition-all font-semibold shadow-2xs">
+          <span id="theme-icon">☀️</span>
+          <span id="theme-text">Bright Mode</span>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- ================= MAIN DASHBOARD BODY ================= -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-3 lg:p-4 grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+    <!-- ================= LEFT COLUMN: WORKBENCH CONTROLS (5 cols) ================= -->
+    <div class="lg:col-span-5 flex flex-col gap-3.5 order-2 lg:order-1">
+
+      <!-- Navigation Tabs for Workbench -->
+      <div class="flex items-center justify-between p-1 bg-slate-100/90 rounded-xl border border-slate-200 shadow-xs">
+        <button id="tab-btn-input" onclick="switchTab('input')" class="tab-btn flex-1 py-1.5 px-2 text-xs font-semibold rounded-lg transition-all duration-200 bg-white text-indigo-700 shadow-sm border border-slate-200/60 flex items-center justify-center gap-1.5">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          <span>Input & Vocab</span>
+        </button>
+        <button id="tab-btn-matrix" onclick="switchTab('matrix')" class="tab-btn flex-1 py-1.5 px-2 text-xs font-semibold rounded-lg transition-all duration-200 text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1.5">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          <span>Embeddings</span>
+        </button>
+        <button id="tab-btn-similarity" onclick="switchTab('similarity')" class="tab-btn flex-1 py-1.5 px-2 text-xs font-semibold rounded-lg transition-all duration-200 text-amber-700 hover:text-amber-800 flex items-center justify-center gap-1.5">
+          <svg class="w-3.5 h-3.5 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6"/><path d="M8 11h6"/></svg>
+          <span>Similarity</span>
+        </button>
+        <button id="tab-btn-analogy" onclick="switchTab('analogy')" class="tab-btn flex-1 py-1.5 px-2 text-xs font-semibold rounded-lg transition-all duration-200 text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1.5">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>
+          <span>Analogy</span>
+        </button>
+      </div>
+
+      <!-- ================= TAB 1: INPUT, TOKENS & VOCABULARY ================= -->
+      <div id="tab-content-input" class="tab-pane flex flex-col gap-3.5">
+
+        <!-- Preset Text Selector -->
+        <div class="glass-panel p-3.5 rounded-2xl flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+              <span>📚 Sample Text Presets:</span>
+            </span>
+            <span class="text-[10px] text-slate-500 font-medium">Click to load</span>
+          </div>
+          <div class="grid grid-cols-2 gap-1.5 text-xs">
+            <button onclick="loadPreset('cosmic')" class="px-2.5 py-2 rounded-xl bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-200 text-left transition-all flex items-center gap-2 group shadow-2xs">
+              <span class="text-base">🪐</span>
+              <span class="truncate text-indigo-900 font-semibold group-hover:text-indigo-700">Cosmic AI & Stars</span>
+            </button>
+            <button onclick="loadPreset('kingdom')" class="px-2.5 py-2 rounded-xl bg-amber-50/80 hover:bg-amber-100 border border-amber-200 text-left transition-all flex items-center gap-2 group shadow-2xs">
+              <span class="text-base">👑</span>
+              <span class="truncate text-amber-900 font-semibold group-hover:text-amber-700">Royalty & Empires</span>
+            </button>
+            <button onclick="loadPreset('nature')" class="px-2.5 py-2 rounded-xl bg-emerald-50/80 hover:bg-emerald-100 border border-emerald-200 text-left transition-all flex items-center gap-2 group shadow-2xs">
+              <span class="text-base">🌲</span>
+              <span class="truncate text-emerald-900 font-semibold group-hover:text-emerald-700">Nature & Rivers</span>
+            </button>
+            <button onclick="loadPreset('blend')" class="px-2.5 py-2 rounded-xl bg-purple-50/80 hover:bg-purple-100 border border-purple-200 text-left transition-all flex items-center gap-2 group shadow-2xs">
+              <span class="text-base">🔮</span>
+              <span class="truncate text-purple-900 font-semibold group-hover:text-purple-700">Cross-Domain Mix</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Raw Text Input Area -->
+        <div class="glass-panel p-3.5 rounded-2xl flex flex-col gap-2.5">
+          <div class="flex items-center justify-between">
+            <label for="text-input" class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-indigo-600"></span>
+              <span>Input Raw Text Corpus:</span>
+            </label>
+            <div class="text-[11px] text-slate-500 font-mono font-medium">
+              <span id="char-count">0</span> chars • <span id="word-count">0</span> words
+            </div>
+          </div>
+
+          <textarea id="text-input" rows="4" 
+            class="w-full text-xs font-mono glass-input rounded-xl p-3 placeholder-slate-400 focus:outline-none transition-all resize-y leading-relaxed shadow-inner"
+            placeholder="Type or paste any text here to observe tokenization, vocabulary mapping, and 3D embedding generation..."></textarea>
+
+          <!-- Pipeline Controls & Hyperparameters -->
+          <div class="grid grid-cols-2 gap-3 pt-1 text-xs">
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] text-slate-600 font-medium flex justify-between">
+                <span>Co-occurrence Context:</span>
+                <span id="cooccur-val" class="text-indigo-600 font-mono font-bold">40%</span>
+              </span>
+              <input type="range" id="cooccur-slider" min="0" max="100" value="40" 
+                class="w-full h-1.5 bg-slate-200 rounded-lg cursor-pointer">
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] text-slate-600 font-medium flex justify-between">
+                <span>Token Lowercasing:</span>
+                <span id="case-mode" class="text-indigo-600 font-bold">Enabled</span>
+              </span>
+              <div class="flex items-center gap-3 pt-0.5">
+                <label class="inline-flex items-center cursor-pointer text-[11px] text-slate-700 font-medium">
+                  <input type="checkbox" id="lowercase-check" checked class="sr-only peer">
+                  <div class="w-8 h-4 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-indigo-600"></div>
+                  <span class="ml-2">Fold Case</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Run Pipeline Action Button -->
+          <button id="btn-process-text" onclick="processPipeline()" 
+            class="w-full mt-1 py-2.5 px-4 bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-600 hover:from-indigo-700 hover:to-cyan-700 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-600/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            <span>Execute Pipeline: Text → Vocab → 3D Model</span>
+          </button>
+        </div>
+
+        <!-- Tokenized Stream Breakdown -->
+        <div class="glass-panel p-3.5 rounded-2xl flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-purple-500"></span>
+              <span>Token Stream Breakdown:</span>
+            </span>
+            <span class="text-[10px] text-slate-500 font-medium">Hover badge to see Token ID</span>
+          </div>
+
+          <div id="token-stream-container" class="max-h-36 overflow-y-auto p-2 bg-slate-50/90 rounded-xl border border-slate-200 flex flex-wrap gap-1.5 text-xs font-mono">
+            <!-- Dynamically populated token badges -->
+            <span class="text-slate-400 text-xs italic">Run pipeline to view tokens...</span>
+          </div>
+        </div>
+
+        <!-- Vocabulary Bank Table -->
+        <div class="glass-panel p-3.5 rounded-2xl flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-cyan-600"></span>
+              <span>Unique Vocabulary ($V$):</span>
+            </span>
+            <input type="text" id="vocab-search" oninput="filterVocabTable()" placeholder="Filter vocab..." 
+              class="text-[11px] glass-input px-2.5 py-1 rounded-lg text-slate-800 focus:outline-none w-32 font-mono">
+          </div>
+
+          <div class="max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-inner">
+            <table class="w-full text-left text-xs font-mono">
+              <thead class="sticky top-0 bg-slate-100 text-slate-600 text-[10px] uppercase border-b border-slate-200 font-bold">
+                <tr>
+                  <th class="py-1.5 px-3">ID</th>
+                  <th class="py-1.5 px-3">Token</th>
+                  <th class="py-1.5 px-2 text-center">Freq</th>
+                  <th class="py-1.5 px-2">Category</th>
+                  <th class="py-1.5 px-3 text-right">3D Action</th>
+                </tr>
+              </thead>
+              <tbody id="vocab-table-body" class="divide-y divide-slate-100 text-slate-700">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ================= TAB 2: EMBEDDING MATRIX & PCA ================= -->
+      <div id="tab-content-matrix" class="tab-pane hidden flex flex-col gap-3.5">
+        
+        <div class="glass-panel p-3.5 rounded-2xl flex flex-col gap-2.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span>Dense Embedding Matrix ($N \times 24$):</span>
+            </span>
+            <span class="text-[10px] font-mono text-indigo-700 font-semibold bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">Normalized L2 = 1.0</span>
+          </div>
+          <p class="text-[11px] text-slate-600">
+            Each row maps a token to 24 latent semantic dimensions. Hover over any cell to inspect its exact weight.
+          </p>
+
+          <!-- Heatmap Container -->
+          <div id="embedding-matrix-container" class="max-h-64 overflow-x-auto overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 font-mono text-[10px] shadow-inner">
+            <!-- Dynamic Heatmap rendered via JS -->
+          </div>
+
+          <!-- Color Scale Legend -->
+          <div class="flex items-center justify-between text-[10px] text-slate-600 font-mono px-2 pt-1 border-t border-slate-200">
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-blue-500"></span> -1.0 (Negative)</span>
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-slate-200"></span> 0.0 (Neutral)</span>
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-emerald-500"></span> +1.0 (Positive)</span>
+          </div>
+        </div>
+
+        <!-- PCA Dimensionality Reduction Metrics -->
+        <div class="glass-panel p-3.5 rounded-2xl flex flex-col gap-2.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+              <span>Principal Component Analysis (PCA):</span>
+            </span>
+            <span class="text-[10px] text-slate-500 font-medium">24D → 3D Transformation</span>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2 text-center font-mono">
+            <div class="p-2 rounded-xl bg-red-50/70 border border-red-200">
+              <div class="text-[10px] text-red-700 font-semibold">PC1 (X-Axis)</div>
+              <div id="pca-var-pc1" class="text-sm font-bold text-red-900">--%</div>
+              <div class="text-[9px] text-slate-500">Major variance</div>
+            </div>
+            <div class="p-2 rounded-xl bg-emerald-50/70 border border-emerald-200">
+              <div class="text-[10px] text-emerald-700 font-semibold">PC2 (Y-Axis)</div>
+              <div id="pca-var-pc2" class="text-sm font-bold text-emerald-900">--%</div>
+              <div class="text-[9px] text-slate-500">Secondary axis</div>
+            </div>
+            <div class="p-2 rounded-xl bg-blue-50/70 border border-blue-200">
+              <div class="text-[10px] text-blue-700 font-semibold">PC3 (Z-Axis)</div>
+              <div id="pca-var-pc3" class="text-sm font-bold text-blue-900">--%</div>
+              <div class="text-[9px] text-slate-500">Tertiary axis</div>
+            </div>
+          </div>
+
+          <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-700 leading-relaxed font-sans">
+            <strong class="text-indigo-700">PCA Formula:</strong> $\mathbf{y} = (\mathbf{x} - \boldsymbol{\mu}) \mathbf{W}_3$.
+            Calculates covariance matrix of high-dimensional embeddings and extracts the top 3 eigenvectors via Power Iteration to retain maximum semantic variance in 3D.
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ================= TAB 3: ADD NEW WORDS & TEST SIMILARITY (FEATURED) ================= -->
+      <div id="tab-content-similarity" class="tab-pane hidden flex flex-col gap-3.5">
+
+        <!-- Input Box for New Word -->
+        <div class="glass-panel p-3.5 rounded-2xl flex flex-col gap-3 border border-amber-300 shadow-sm bg-gradient-to-b from-amber-50/30 to-white">
+          <div class="flex items-center justify-between">
+            <label for="query-word-input" class="text-xs font-extrabold text-amber-900 flex items-center gap-1.5">
+              <svg class="w-4 h-4 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6"/><path d="M8 11h6"/></svg>
+              <span>Test Word Similarity & 3D Probe:</span>
+            </label>
+            <span class="text-[10px] px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-mono font-bold border border-amber-200">Cosine Metric</span>
+          </div>
+
+          <p class="text-[11px] text-slate-600 leading-relaxed">
+            Enter <strong>any new word</strong> to embed it, project it into the 3D model, draw glowing connecting laser lines, and measure semantic similarity against existing tokens!
+          </p>
+
+          <div class="flex gap-2">
+            <input type="text" id="query-word-input" 
+              class="flex-1 glass-input rounded-xl px-3.5 py-2 text-xs font-mono text-slate-900 placeholder-slate-400 focus:outline-none"
+              placeholder="e.g. astronaut, robot, queen, banana..." 
+              onkeydown="if(event.key === 'Enter') testWordSimilarity()">
+
+            <button onclick="testWordSimilarity()" 
+              class="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold text-xs rounded-xl shadow-md shadow-amber-500/20 active:scale-95 transition-all flex items-center gap-1.5">
+              <span>Probe</span>
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            </button>
+          </div>
+
+          <!-- Quick Suggestion Pills -->
+          <div class="flex flex-col gap-1.5">
+            <span class="text-[10px] text-slate-500 font-medium">Quick suggestions to try:</span>
+            <div class="flex flex-wrap gap-1.5 text-[11px]">
+              <button onclick="setQueryWord('astronaut')" class="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-mono transition-all shadow-2xs font-medium">astronaut</button>
+              <button onclick="setQueryWord('supercomputer')" class="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-mono transition-all shadow-2xs font-medium">supercomputer</button>
+              <button onclick="setQueryWord('monarch')" class="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-mono transition-all shadow-2xs font-medium">monarch</button>
+              <button onclick="setQueryWord('rainforest')" class="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-mono transition-all shadow-2xs font-medium">rainforest</button>
+              <button onclick="setQueryWord('quantum')" class="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-mono transition-all shadow-2xs font-medium">quantum</button>
+            </div>
+          </div>
+
+          <!-- Permanent Add & Clear Options -->
+          <div class="flex items-center gap-2 pt-1 border-t border-slate-200">
+            <button onclick="addWordToVocabularyPermanently()" 
+              class="flex-1 py-1.5 px-3 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-semibold transition-all flex items-center justify-center gap-1.5 shadow-2xs">
+              <svg class="w-3.5 h-3.5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14m-7-7h14"/></svg>
+              <span>Add Word to Vocab Model</span>
+            </button>
+            <button onclick="clearQueryProbe()" 
+              class="py-1.5 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition-all border border-slate-200">
+              Clear Probe
+            </button>
+          </div>
+        </div>
+
+        <!-- Similarity Leaderboard Card -->
+        <div class="glass-panel p-3.5 rounded-2xl flex flex-col gap-2.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+              <span>Similarity Leaderboard:</span>
+            </span>
+            <div class="flex items-center gap-2 text-[10px] text-slate-600 font-medium">
+              <span>Min Sim:</span>
+              <span id="sim-threshold-val" class="font-mono text-amber-700 font-bold">40%</span>
+              <input type="range" id="sim-threshold-slider" min="0" max="95" value="40" 
+                class="w-16 h-1 bg-slate-200 rounded cursor-pointer" oninput="updateSimThreshold(this.value)">
+            </div>
+          </div>
+
+          <div id="similarity-results-container" class="max-h-60 overflow-y-auto space-y-2 pr-1">
+            <div class="text-center py-6 text-slate-400 text-xs">
+              Type any word above and press <strong class="text-slate-600">"Probe"</strong> to see ranked similarity matches!
+            </div>
+          </div>
+        </div>
+
+        <!-- Mathematical explanation badge -->
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 leading-relaxed font-mono">
+          <span class="text-amber-700 font-bold">Cosine Similarity Formula:</span><br>
+          $$\text{sim}(\mathbf{u}, \mathbf{v}) = \frac{\mathbf{u} \cdot \mathbf{v}}{\|\mathbf{u}\|_2 \|\mathbf{v}\|_2} = \cos(\theta)$$
+          • <span class="text-emerald-700 font-bold">+1.0</span> (Identical meaning, $0^\circ$ angle)<br>
+          • <span class="text-slate-600 font-bold">0.0</span> (Orthogonal / Unrelated, $90^\circ$ angle)<br>
+          • <span class="text-rose-700 font-bold">-1.0</span> (Opposite semantic direction, $180^\circ$)
+        </div>
+
+      </div>
+
+      <!-- ================= TAB 4: VECTOR ARITHMETIC / ANALOGIES ================= -->
+      <div id="tab-content-analogy" class="tab-pane hidden flex flex-col gap-3.5">
+        
+        <div class="glass-panel p-3.5 rounded-2xl flex flex-col gap-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-indigo-600"></span>
+              <span>Vector Analogy Engine:</span>
+            </span>
+            <span class="text-[10px] font-mono text-indigo-700 font-semibold bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">Word2Vec Classic</span>
+          </div>
+
+          <p class="text-[11px] text-slate-600 leading-relaxed">
+            Solve semantic vector equations: $\mathbf{A} - \mathbf{B} + \mathbf{C} \approx \mathbf{Target}$.
+          </p>
+
+          <!-- Equation Inputs -->
+          <div class="grid grid-cols-7 gap-1 items-center font-mono text-xs">
+            <input type="text" id="analogy-a" value="king" class="col-span-2 glass-input rounded-lg p-1.5 text-center text-amber-700 font-bold focus:outline-none" placeholder="A">
+            <span class="text-center font-bold text-slate-400">−</span>
+            <input type="text" id="analogy-b" value="man" class="col-span-2 glass-input rounded-lg p-1.5 text-center text-slate-700 font-semibold focus:outline-none" placeholder="B">
+            <span class="text-center font-bold text-slate-400">+</span>
+            <input type="text" id="analogy-c" value="woman" class="col-span-2 glass-input rounded-lg p-1.5 text-center text-indigo-700 font-bold focus:outline-none" placeholder="C">
+          </div>
+
+          <button onclick="computeVectorAnalogy()" 
+            class="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-600/20 active:scale-95 transition-all flex items-center justify-center gap-1.5">
+            <span>Solve Analogy Equation</span>
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+          </button>
+
+          <!-- Analogy Presets -->
+          <div class="flex flex-col gap-1 text-[11px]">
+            <span class="text-slate-500 font-medium text-[10px]">Try famous analogies:</span>
+            <div class="flex flex-wrap gap-1.5">
+              <button onclick="setAnalogy('king', 'man', 'woman')" class="px-2 py-1 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-mono shadow-2xs">king - man + woman</button>
+              <button onclick="setAnalogy('galaxy', 'space', 'computer')" class="px-2 py-1 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-mono shadow-2xs">galaxy - space + computer</button>
+              <button onclick="setAnalogy('forest', 'nature', 'technology')" class="px-2 py-1 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-mono shadow-2xs">forest - nature + tech</button>
+            </div>
+          </div>
+
+          <!-- Analogy Results Box -->
+          <div id="analogy-result-box" class="p-3 rounded-xl bg-slate-50 border border-slate-200 hidden flex-col gap-2 shadow-inner">
+            <span class="text-[10px] text-slate-500 uppercase font-mono font-bold">Resulting Vector Nearest Matches:</span>
+            <div id="analogy-matches" class="space-y-1.5 text-xs font-mono">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ================= RIGHT COLUMN: 3D VIEWPORT CANVAS (7 cols) ================= -->
+    <div class="lg:col-span-7 flex flex-col gap-2 order-1 lg:order-2 h-[550px] lg:h-[720px] sticky top-16">
+
+      <!-- 3D Canvas Container -->
+      <div id="three-container" class="relative w-full h-full rounded-2xl overflow-hidden border border-slate-200 bg-gradient-to-b from-[#f8fafc] via-[#f1f5f9] to-[#e2e8f0] shadow-xl flex items-center justify-center">
+
+        <!-- WebGL Canvas will be injected here -->
+
+        <!-- Floating Top-Right Viewport Controls HUD -->
+        <div class="absolute top-3 right-3 z-20 flex items-center gap-1.5 bg-white/90 backdrop-blur-md p-1.5 rounded-xl border border-slate-200 shadow-md text-xs font-semibold text-slate-700">
+          <button id="btn-toggle-rotate" onclick="toggleAutoRotate()" title="Toggle Auto-Rotation"
+            class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 transition-all flex items-center gap-1 border border-slate-200/80">
+            <svg class="w-3.5 h-3.5 text-indigo-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+            <span id="rotate-label">Rotate</span>
+          </button>
+          
+          <button id="btn-toggle-labels" onclick="toggleLabels()" title="Toggle Billboard Labels"
+            class="px-2.5 py-1 rounded-lg bg-indigo-600 text-white transition-all flex items-center gap-1 shadow-xs">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>
+            <span>Labels</span>
+          </button>
+
+          <button id="btn-toggle-axes" onclick="toggleAxes()" title="Toggle 3D Coordinate Grid & Axes"
+            class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 transition-all flex items-center gap-1 border border-slate-200/80">
+            <svg class="w-3.5 h-3.5 text-cyan-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="21" x2="21" y2="21"/><line x1="3" y1="21" x2="3" y2="3"/><line x1="3" y1="21" x2="16" y2="8"/></svg>
+            <span>Grid</span>
+          </button>
+
+          <button onclick="resetCameraView()" title="Reset Camera View to Origin"
+            class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all flex items-center gap-1 border border-slate-200/80">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+            <span>Reset</span>
+          </button>
+        </div>
+
+        <!-- Floating Top-Left Status Overlay -->
+        <div class="absolute top-3 left-3 z-20 flex flex-col gap-1.5 pointer-events-none">
+          <div class="bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-200 shadow-md text-[11px] font-mono flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span class="text-slate-600">Space: <strong class="text-slate-900 font-bold">PCA 3D Semantic Projection</strong></span>
+          </div>
+          <div id="active-query-badge" class="hidden bg-amber-50/95 backdrop-blur-md px-3 py-1.5 rounded-xl border border-amber-400 shadow-md text-[11px] font-mono text-amber-900 flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+            <span>Query Probing: <strong id="query-badge-name" class="text-amber-800 font-bold"></strong></span>
+          </div>
+        </div>
+
+        <!-- Floating 3D Axes Coordinates Legend (Bottom Left) -->
+        <div class="absolute bottom-3 left-3 z-20 bg-white/90 backdrop-blur-md px-3 py-2 rounded-xl border border-slate-200 shadow-md text-[10px] font-mono flex flex-col gap-1">
+          <span class="text-slate-600 font-bold mb-0.5">3D Coordinate Basis:</span>
+          <div class="flex items-center gap-2 text-red-600 font-semibold">
+            <span class="w-2.5 h-1 bg-red-500 rounded"></span>
+            <span>X: PC1 (Primary Component)</span>
+          </div>
+          <div class="flex items-center gap-2 text-emerald-600 font-semibold">
+            <span class="w-2.5 h-1 bg-emerald-500 rounded"></span>
+            <span>Y: PC2 (Secondary Component)</span>
+          </div>
+          <div class="flex items-center gap-2 text-blue-600 font-semibold">
+            <span class="w-2.5 h-1 bg-blue-500 rounded"></span>
+            <span>Z: PC3 (Tertiary Component)</span>
+          </div>
+        </div>
+
+        <!-- Category Color Coding Legend (Bottom Right) -->
+        <div class="absolute bottom-3 right-3 z-20 hidden sm:flex bg-white/90 backdrop-blur-md px-3 py-2 rounded-xl border border-slate-200 shadow-md text-[10px] font-mono flex-col gap-1">
+          <span class="text-slate-600 font-bold mb-0.5">Semantic Categories:</span>
+          <div class="grid grid-cols-2 gap-x-3 gap-y-1 font-semibold">
+            <span class="flex items-center gap-1.5 text-purple-700"><span class="w-2 h-2 rounded-full bg-purple-600"></span> Space/Cosmic</span>
+            <span class="flex items-center gap-1.5 text-cyan-700"><span class="w-2 h-2 rounded-full bg-cyan-600"></span> Tech / AI</span>
+            <span class="flex items-center gap-1.5 text-amber-700"><span class="w-2 h-2 rounded-full bg-amber-500"></span> Royalty/Power</span>
+            <span class="flex items-center gap-1.5 text-emerald-700"><span class="w-2 h-2 rounded-full bg-emerald-600"></span> Nature/Flora</span>
+            <span class="flex items-center gap-1.5 text-rose-700"><span class="w-2 h-2 rounded-full bg-rose-600"></span> Human/Social</span>
+            <span class="flex items-center gap-1.5 text-slate-700"><span class="w-2 h-2 rounded-full bg-slate-500"></span> General/Syntax</span>
+          </div>
+        </div>
+
+        <!-- 3D Node Hover Tooltip HUD Card (Anchored floating) -->
+        <div id="hover-tooltip" class="absolute hidden z-30 pointer-events-none bg-white/95 backdrop-blur-md border border-indigo-200 p-3 rounded-xl shadow-xl text-xs font-mono max-w-xs transition-opacity duration-150">
+          <!-- Dynamically populated via Raycaster -->
+        </div>
+
+        <!-- Loading / Startup Overlay -->
+        <div id="loading-overlay" class="absolute inset-0 bg-white/90 z-30 flex flex-col items-center justify-center gap-3">
+          <div class="w-10 h-10 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
+          <span class="text-xs text-indigo-700 font-mono font-bold">Initializing 3D Neural Vector Space...</span>
+        </div>
+
+      </div>
+
+      <!-- Quick Guidance Footer Note -->
+      <div class="flex items-center justify-between text-[11px] text-slate-500 px-2 font-mono">
+        <span class="flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5 text-indigo-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          <span>Left-click + drag to rotate • Right-click to pan • Scroll to zoom • Click node to focus</span>
+        </span>
+        <span class="text-indigo-600 font-semibold">WebGL 3D Enabled</span>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- ================= JAVASCRIPT PIPELINE & THREE.JS ENGINE ================= -->
+  <script>
+    /**
+     * =========================================================================
+     * 1. PRESET TEXTS
+     * =========================================================================
+     */
+    const PRESETS = {
+      cosmic: "Artificial intelligence neural networks navigate distant galaxies, stars, planets, and algorithmic telescopes across the vast cosmic universe.",
+      kingdom: "The wise king and noble queen ruled their grand empire, crowned with majesty upon the golden throne of monarchs and sovereignty.",
+      nature: "Deep within the ancient forest, wild rivers flow beneath towering trees where birds, wildlife, and flowers thrive in peaceful harmony.",
+      blend: "Across galaxies and kingdoms, ancient monarchs and futuristic robots ponder algorithms of nature, rivers, stars, and consciousness."
+    };
+
+    /**
+     * =========================================================================
+     * 2. SEMANTIC FEATURE BASIS (24 Latent Semantic Dimensions)
+     * =========================================================================
+     */
+    const DIM_NAMES = [
+      "Space/Cosmic", "Tech/AI", "Hardware/Robot", "Royalty", "Power/Rule",
+      "Flora/Plant", "Fauna/Animal", "Water/Aquatic", "Energy/Light", "Human/Social",
+      "Gender (+M/-F)", "Emotion", "Food", "Motion/Speed", "Logic/Mind",
+      "Scale/Massive", "Architecture", "Time/Era", "Language/Text", "Temperature",
+      "Art/Creation", "Combat/Defense", "Earth/Terrain", "Abstract Math"
+    ];
+
+    // Curated high-dimensional semantic vectors for core English tokens
+    const SEMANTIC_DICTIONARY = {
+      // Astronomy & Space
+      "space":       [1.0, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.7, 0.0, 0.0, 0.0, 0.0, 0.5, 0.2, 1.0, 0.0, 0.6, 0.0, -0.8, 0.0, 0.0, 0.2, 0.4],
+      "galaxy":      [1.0, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.8, 0.0, 0.0, 0.0, 0.0, 0.4, 0.2, 1.0, 0.0, 0.7, 0.0, -0.6, 0.0, 0.0, 0.1, 0.5],
+      "galaxies":    [1.0, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.8, 0.0, 0.0, 0.0, 0.0, 0.4, 0.2, 1.0, 0.0, 0.7, 0.0, -0.6, 0.0, 0.0, 0.1, 0.5],
+      "star":        [0.95, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.1, 0.0, 0.2, 0.1, 0.8, 0.0, 0.6, 0.0, 1.0, 0.0, 0.0, 0.1, 0.3],
+      "stars":       [0.95, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.1, 0.0, 0.2, 0.1, 0.8, 0.0, 0.6, 0.0, 1.0, 0.0, 0.0, 0.1, 0.3],
+      "planet":      [0.9, 0.0, 0.0, 0.0, 0.0, 0.2, 0.0, 0.2, 0.4, 0.0, 0.0, 0.0, 0.0, 0.6, 0.1, 0.8, 0.0, 0.6, 0.0, 0.0, 0.0, 0.0, 0.8, 0.3],
+      "planets":     [0.9, 0.0, 0.0, 0.0, 0.0, 0.2, 0.0, 0.2, 0.4, 0.0, 0.0, 0.0, 0.0, 0.6, 0.1, 0.8, 0.0, 0.6, 0.0, 0.0, 0.0, 0.0, 0.8, 0.3],
+      "universe":    [1.0, 0.2, 0.0, 0.0, 0.1, 0.1, 0.1, 0.1, 0.6, 0.2, 0.0, 0.1, 0.0, 0.3, 0.5, 1.0, 0.0, 0.9, 0.1, 0.0, 0.1, 0.0, 0.4, 0.8],
+      "cosmic":      [0.95, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.7, 0.0, 0.0, 0.1, 0.0, 0.4, 0.3, 0.9, 0.0, 0.7, 0.0, -0.4, 0.0, 0.0, 0.2, 0.6],
+      "telescope":   [0.8, 0.6, 0.8, 0.0, 0.0, 0.0, 0.0, 0.0, 0.7, 0.3, 0.0, 0.0, 0.0, 0.1, 0.8, 0.3, 0.0, 0.3, 0.2, 0.0, 0.0, 0.0, 0.0, 0.4],
+      "telescopes":  [0.8, 0.6, 0.8, 0.0, 0.0, 0.0, 0.0, 0.0, 0.7, 0.3, 0.0, 0.0, 0.0, 0.1, 0.8, 0.3, 0.0, 0.3, 0.2, 0.0, 0.0, 0.0, 0.0, 0.4],
+      "satellite":   [0.85, 0.7, 0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.4, 0.1, 0.0, 0.0, 0.0, 0.8, 0.6, 0.3, 0.0, 0.4, 0.6, -0.5, 0.0, 0.1, 0.0, 0.3],
+      "astronaut":   [0.85, 0.4, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3, 0.9, 0.2, 0.2, 0.0, 0.7, 0.7, 0.2, 0.0, 0.4, 0.2, 0.0, 0.0, 0.1, 0.1, 0.2],
+
+      // Computing, AI & Tech
+      "artificial":  [0.1, 0.9, 0.7, 0.0, 0.0, 0.0, 0.0, 0.0, 0.2, 0.3, 0.0, 0.0, 0.0, 0.1, 0.8, 0.0, 0.2, 0.5, 0.3, 0.0, 0.4, 0.0, 0.0, 0.6],
+      "intelligence":[0.1, 0.95, 0.4, 0.1, 0.2, 0.0, 0.1, 0.0, 0.3, 0.8, 0.0, 0.3, 0.0, 0.1, 1.0, 0.2, 0.0, 0.4, 0.5, 0.0, 0.3, 0.0, 0.0, 0.8],
+      "ai":          [0.2, 1.0, 0.8, 0.0, 0.1, 0.0, 0.0, 0.0, 0.4, 0.4, 0.0, 0.1, 0.0, 0.2, 1.0, 0.3, 0.1, 0.6, 0.5, 0.0, 0.3, 0.1, 0.0, 0.8],
+      "neural":      [0.1, 0.9, 0.5, 0.0, 0.0, 0.1, 0.3, 0.0, 0.3, 0.5, 0.0, 0.2, 0.0, 0.2, 0.9, 0.1, 0.0, 0.3, 0.3, 0.0, 0.1, 0.0, 0.0, 0.7],
+      "network":     [0.1, 0.9, 0.6, 0.0, 0.2, 0.0, 0.0, 0.0, 0.3, 0.6, 0.0, 0.1, 0.0, 0.3, 0.8, 0.4, 0.2, 0.3, 0.7, 0.0, 0.2, 0.1, 0.0, 0.7],
+      "networks":    [0.1, 0.9, 0.6, 0.0, 0.2, 0.0, 0.0, 0.0, 0.3, 0.6, 0.0, 0.1, 0.0, 0.3, 0.8, 0.4, 0.2, 0.3, 0.7, 0.0, 0.2, 0.1, 0.0, 0.7],
+      "computer":    [0.1, 1.0, 0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.4, 0.4, 0.0, 0.0, 0.0, 0.1, 0.9, 0.2, 0.1, 0.5, 0.7, 0.0, 0.2, 0.0, 0.0, 0.6],
+      "computers":   [0.1, 1.0, 0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.4, 0.4, 0.0, 0.0, 0.0, 0.1, 0.9, 0.2, 0.1, 0.5, 0.7, 0.0, 0.2, 0.0, 0.0, 0.6],
+      "algorithm":   [0.1, 0.95, 0.4, 0.0, 0.1, 0.0, 0.0, 0.0, 0.2, 0.2, 0.0, 0.0, 0.0, 0.1, 1.0, 0.1, 0.0, 0.4, 0.8, 0.0, 0.2, 0.0, 0.0, 0.9],
+      "algorithmic": [0.1, 0.95, 0.4, 0.0, 0.1, 0.0, 0.0, 0.0, 0.2, 0.2, 0.0, 0.0, 0.0, 0.1, 1.0, 0.1, 0.0, 0.4, 0.8, 0.0, 0.2, 0.0, 0.0, 0.9],
+      "algorithms":  [0.1, 0.95, 0.4, 0.0, 0.1, 0.0, 0.0, 0.0, 0.2, 0.2, 0.0, 0.0, 0.0, 0.1, 1.0, 0.1, 0.0, 0.4, 0.8, 0.0, 0.2, 0.0, 0.0, 0.9],
+      "robot":       [0.2, 0.9, 1.0, 0.0, 0.1, 0.0, 0.1, 0.0, 0.3, 0.4, 0.0, 0.0, 0.0, 0.6, 0.7, 0.2, 0.0, 0.5, 0.4, 0.0, 0.2, 0.3, 0.0, 0.4],
+      "robots":      [0.2, 0.9, 1.0, 0.0, 0.1, 0.0, 0.1, 0.0, 0.3, 0.4, 0.0, 0.0, 0.0, 0.6, 0.7, 0.2, 0.0, 0.5, 0.4, 0.0, 0.2, 0.3, 0.0, 0.4],
+      "quantum":     [0.4, 0.8, 0.4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.8, 0.1, 0.0, 0.0, 0.0, 0.3, 0.9, -0.9, 0.0, 0.5, 0.2, 0.0, 0.0, 0.1, 0.0, 0.95],
+      "navigate":    [0.3, 0.5, 0.4, 0.0, 0.1, 0.0, 0.0, 0.2, 0.2, 0.5, 0.0, 0.1, 0.0, 0.9, 0.7, 0.3, 0.0, 0.3, 0.3, 0.0, 0.0, 0.0, 0.3, 0.4],
+
+      // Royalty, Empires & Governance
+      "king":        [0.0, 0.0, 0.0, 1.0, 0.95, 0.0, 0.0, 0.0, 0.3, 0.9, 1.0, 0.3, 0.0, 0.1, 0.5, 0.6, 0.7, 0.7, 0.4, 0.2, 0.3, 0.5, 0.2, 0.3],
+      "queen":       [0.0, 0.0, 0.0, 1.0, 0.95, 0.0, 0.0, 0.0, 0.3, 0.9, -1.0, 0.3, 0.0, 0.1, 0.5, 0.6, 0.7, 0.7, 0.4, 0.2, 0.3, 0.4, 0.2, 0.3],
+      "monarch":     [0.0, 0.0, 0.0, 1.0, 0.9, 0.0, 0.0, 0.0, 0.3, 0.9, 0.0, 0.2, 0.0, 0.1, 0.5, 0.6, 0.7, 0.8, 0.4, 0.1, 0.2, 0.4, 0.2, 0.3],
+      "monarchs":    [0.0, 0.0, 0.0, 1.0, 0.9, 0.0, 0.0, 0.0, 0.3, 0.9, 0.0, 0.2, 0.0, 0.1, 0.5, 0.6, 0.7, 0.8, 0.4, 0.1, 0.2, 0.4, 0.2, 0.3],
+      "empire":      [0.0, 0.0, 0.0, 0.9, 0.95, 0.0, 0.0, 0.0, 0.3, 0.8, 0.0, 0.2, 0.0, 0.2, 0.5, 0.9, 0.8, 0.8, 0.3, 0.1, 0.3, 0.7, 0.5, 0.3],
+      "throne":      [0.0, 0.0, 0.0, 0.95, 0.85, 0.0, 0.0, 0.0, 0.4, 0.4, 0.0, 0.1, 0.0, 0.0, 0.2, 0.4, 0.7, 0.7, 0.2, 0.2, 0.5, 0.2, 0.1, 0.2],
+      "crown":       [0.0, 0.0, 0.0, 0.95, 0.8, 0.0, 0.0, 0.0, 0.6, 0.4, 0.0, 0.2, 0.0, 0.0, 0.2, 0.2, 0.4, 0.7, 0.1, 0.2, 0.6, 0.2, 0.1, 0.2],
+      "crowns":      [0.0, 0.0, 0.0, 0.95, 0.8, 0.0, 0.0, 0.0, 0.6, 0.4, 0.0, 0.2, 0.0, 0.0, 0.2, 0.2, 0.4, 0.7, 0.1, 0.2, 0.6, 0.2, 0.1, 0.2],
+      "noble":       [0.0, 0.0, 0.0, 0.8, 0.7, 0.0, 0.0, 0.0, 0.4, 0.8, 0.0, 0.5, 0.0, 0.0, 0.4, 0.3, 0.4, 0.6, 0.3, 0.1, 0.3, 0.3, 0.1, 0.4],
+      "majesty":     [0.0, 0.0, 0.0, 0.9, 0.85, 0.0, 0.0, 0.0, 0.5, 0.7, 0.0, 0.5, 0.0, 0.1, 0.4, 0.7, 0.5, 0.6, 0.2, 0.2, 0.4, 0.3, 0.1, 0.5],
+      "sovereignty": [0.0, 0.0, 0.0, 0.9, 0.95, 0.0, 0.0, 0.0, 0.3, 0.7, 0.0, 0.2, 0.0, 0.1, 0.6, 0.6, 0.5, 0.6, 0.4, 0.1, 0.2, 0.5, 0.3, 0.6],
+      "ruled":       [0.0, 0.0, 0.0, 0.85, 0.9, 0.0, 0.0, 0.0, 0.2, 0.7, 0.0, 0.2, 0.0, 0.1, 0.5, 0.6, 0.4, 0.6, 0.3, 0.0, 0.1, 0.4, 0.2, 0.3],
+
+      // Nature, Flora, Fauna & Rivers
+      "forest":      [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.7, 0.3, 0.3, 0.0, 0.0, 0.3, 0.3, 0.1, 0.1, 0.7, 0.0, 0.6, 0.0, 0.0, 0.2, 0.0, 0.9, 0.1],
+      "tree":        [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.4, 0.3, 0.4, 0.0, 0.0, 0.2, 0.3, 0.0, 0.0, 0.5, 0.0, 0.6, 0.0, 0.0, 0.2, 0.0, 0.8, 0.1],
+      "trees":       [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.4, 0.3, 0.4, 0.0, 0.0, 0.2, 0.3, 0.0, 0.0, 0.5, 0.0, 0.6, 0.0, 0.0, 0.2, 0.0, 0.8, 0.1],
+      "river":       [0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.5, 1.0, 0.4, 0.0, 0.0, 0.3, 0.2, 0.8, 0.1, 0.6, 0.0, 0.5, 0.0, -0.2, 0.2, 0.0, 0.7, 0.1],
+      "rivers":      [0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.5, 1.0, 0.4, 0.0, 0.0, 0.3, 0.2, 0.8, 0.1, 0.6, 0.0, 0.5, 0.0, -0.2, 0.2, 0.0, 0.7, 0.1],
+      "birds":       [0.1, 0.0, 0.0, 0.0, 0.0, 0.3, 1.0, 0.2, 0.3, 0.0, 0.0, 0.4, 0.2, 0.9, 0.3, 0.1, 0.0, 0.4, 0.4, 0.0, 0.3, 0.0, 0.2, 0.1],
+      "bird":        [0.1, 0.0, 0.0, 0.0, 0.0, 0.3, 1.0, 0.2, 0.3, 0.0, 0.0, 0.4, 0.2, 0.9, 0.3, 0.1, 0.0, 0.4, 0.4, 0.0, 0.3, 0.0, 0.2, 0.1],
+      "wildlife":    [0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 0.3, 0.2, 0.0, 0.0, 0.3, 0.3, 0.7, 0.2, 0.5, 0.0, 0.5, 0.0, 0.0, 0.1, 0.2, 0.7, 0.1],
+      "animals":     [0.0, 0.0, 0.0, 0.0, 0.0, 0.2, 1.0, 0.2, 0.2, 0.2, 0.0, 0.3, 0.3, 0.7, 0.3, 0.4, 0.0, 0.5, 0.1, 0.0, 0.1, 0.2, 0.6, 0.1],
+      "animal":      [0.0, 0.0, 0.0, 0.0, 0.0, 0.2, 1.0, 0.2, 0.2, 0.2, 0.0, 0.3, 0.3, 0.7, 0.3, 0.4, 0.0, 0.5, 0.1, 0.0, 0.1, 0.2, 0.6, 0.1],
+      "flower":      [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.2, 0.2, 0.5, 0.1, 0.0, 0.7, 0.1, 0.0, 0.0, 0.1, 0.0, 0.2, 0.0, 0.2, 0.8, 0.0, 0.4, 0.2],
+      "flowers":     [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.2, 0.2, 0.5, 0.1, 0.0, 0.7, 0.1, 0.0, 0.0, 0.1, 0.0, 0.2, 0.0, 0.2, 0.8, 0.0, 0.4, 0.2],
+      "nature":      [0.1, 0.0, 0.0, 0.0, 0.0, 0.9, 0.8, 0.7, 0.4, 0.2, 0.0, 0.5, 0.3, 0.3, 0.3, 0.8, 0.0, 0.7, 0.1, 0.0, 0.5, 0.0, 0.9, 0.5],
+      "harmony":     [0.1, 0.1, 0.0, 0.2, 0.2, 0.4, 0.4, 0.3, 0.5, 0.6, 0.0, 0.9, 0.0, 0.1, 0.6, 0.3, 0.1, 0.5, 0.3, 0.2, 0.7, -0.6, 0.2, 0.7],
+      "peaceful":    [0.1, 0.0, 0.0, 0.2, 0.1, 0.5, 0.4, 0.4, 0.4, 0.6, 0.0, 0.95, 0.0, 0.0, 0.5, 0.3, 0.1, 0.4, 0.2, 0.1, 0.6, -0.8, 0.3, 0.6],
+
+      // Common & Grammatical Tokens
+      "man":         [0.0, 0.0, 0.0, 0.1, 0.1, 0.0, 0.3, 0.0, 0.1, 1.0, 1.0, 0.3, 0.1, 0.3, 0.6, 0.2, 0.2, 0.4, 0.4, 0.1, 0.2, 0.2, 0.1, 0.2],
+      "woman":       [0.0, 0.0, 0.0, 0.1, 0.1, 0.0, 0.3, 0.0, 0.1, 1.0, -1.0, 0.3, 0.1, 0.3, 0.6, 0.2, 0.2, 0.4, 0.4, 0.1, 0.3, 0.1, 0.1, 0.2],
+      "human":       [0.1, 0.2, 0.1, 0.1, 0.2, 0.0, 0.4, 0.0, 0.2, 1.0, 0.0, 0.6, 0.2, 0.3, 0.9, 0.2, 0.3, 0.6, 0.6, 0.1, 0.5, 0.2, 0.2, 0.5],
+      "consciousness":[0.2, 0.4, 0.1, 0.1, 0.1, 0.2, 0.3, 0.1, 0.5, 0.9, 0.0, 0.7, 0.0, 0.1, 1.0, 0.4, 0.0, 0.6, 0.4, 0.1, 0.5, 0.0, 0.2, 0.95],
+      "ancient":     [0.1, 0.0, 0.0, 0.3, 0.3, 0.4, 0.2, 0.2, 0.2, 0.4, 0.0, 0.3, 0.0, 0.0, 0.4, 0.4, 0.6, 1.0, 0.4, 0.0, 0.4, 0.2, 0.5, 0.4],
+      "futuristic":  [0.3, 0.9, 0.8, 0.1, 0.1, 0.0, 0.0, 0.0, 0.6, 0.3, 0.0, 0.1, 0.0, 0.4, 0.8, 0.4, 0.5, -0.9, 0.4, 0.0, 0.4, 0.2, 0.0, 0.6],
+      "vast":        [0.8, 0.1, 0.0, 0.2, 0.3, 0.3, 0.1, 0.4, 0.3, 0.0, 0.0, 0.2, 0.0, 0.2, 0.2, 1.0, 0.1, 0.6, 0.0, 0.0, 0.1, 0.1, 0.5, 0.5],
+      "distant":     [0.7, 0.1, 0.0, 0.1, 0.1, 0.1, 0.0, 0.2, 0.2, 0.1, 0.0, 0.1, 0.0, 0.4, 0.2, 0.7, 0.0, 0.7, 0.0, -0.2, 0.0, 0.0, 0.3, 0.4],
+      "across":      [0.3, 0.1, 0.0, 0.0, 0.0, 0.1, 0.1, 0.2, 0.1, 0.0, 0.0, 0.0, 0.0, 0.8, 0.1, 0.6, 0.0, 0.2, 0.1, 0.0, 0.0, 0.0, 0.3, 0.4],
+      "beneath":     [0.1, 0.0, 0.0, 0.0, 0.0, 0.3, 0.2, 0.3, -0.3, 0.0, 0.0, 0.0, 0.0, 0.2, 0.1, 0.3, 0.2, 0.1, 0.0, -0.2, 0.0, 0.0, 0.6, 0.2],
+      "towering":    [0.2, 0.0, 0.0, 0.2, 0.2, 0.6, 0.0, 0.0, 0.3, 0.0, 0.0, 0.2, 0.0, 0.1, 0.1, 0.9, 0.6, 0.3, 0.0, 0.0, 0.2, 0.1, 0.6, 0.2],
+      "flow":        [0.1, 0.1, 0.0, 0.0, 0.0, 0.2, 0.1, 0.9, 0.2, 0.0, 0.0, 0.2, 0.0, 0.9, 0.3, 0.3, 0.0, 0.3, 0.2, 0.0, 0.3, 0.0, 0.3, 0.4],
+      "thrive":      [0.0, 0.1, 0.0, 0.1, 0.2, 0.8, 0.8, 0.4, 0.5, 0.4, 0.0, 0.7, 0.3, 0.4, 0.4, 0.4, 0.1, 0.4, 0.1, 0.2, 0.2, 0.0, 0.5, 0.3],
+      "ponder":      [0.1, 0.3, 0.0, 0.1, 0.0, 0.1, 0.0, 0.1, 0.2, 0.8, 0.0, 0.5, 0.0, 0.0, 1.0, 0.2, 0.0, 0.5, 0.4, 0.0, 0.3, 0.0, 0.1, 0.8],
+      "the":         [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.8, 0.0, 0.0, 0.0, 0.0, 0.9],
+      "and":         [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.8, 0.0, 0.0, 0.0, 0.0, 0.9],
+      "their":       [0.0, 0.0, 0.0, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.6, 0.0, 0.0, 0.0, 0.0, 0.1, 0.0, 0.0, 0.1, 0.8, 0.0, 0.0, 0.0, 0.0, 0.7],
+      "upon":        [0.0, 0.0, 0.0, 0.2, 0.1, 0.0, 0.0, 0.0, 0.0, 0.2, 0.0, 0.0, 0.0, 0.2, 0.1, 0.2, 0.2, 0.3, 0.7, 0.0, 0.0, 0.0, 0.2, 0.6],
+      "where":       [0.1, 0.0, 0.0, 0.0, 0.0, 0.1, 0.1, 0.1, 0.0, 0.1, 0.0, 0.0, 0.0, 0.2, 0.3, 0.3, 0.2, 0.2, 0.8, 0.0, 0.0, 0.0, 0.4, 0.7],
+      "with":        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.2, 0.0, 0.1, 0.0, 0.1, 0.1, 0.0, 0.0, 0.0, 0.8, 0.0, 0.0, 0.0, 0.0, 0.8],
+      "of":          [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.9, 0.0, 0.0, 0.0, 0.0, 0.9]
+    };
+
+    /**
+     * FastText-style Character N-Gram Hashing Fallback
+     */
+    function fnv1a(str) {
+      let hash = 2166136261;
+      for (let i = 0; i < str.length; i++) {
+        hash = (hash ^ str.charCodeAt(i)) * 16777619;
+        hash = hash >>> 0;
+      }
+      return hash;
+    }
+
+    function generateSubwordEmbedding(word) {
+      const dim = 24;
+      const v = new Array(dim).fill(0.0);
+      const w = `<${word.toLowerCase()}>`;
+      
+      if (w.includes("astro") || w.includes("star") || w.includes("cosm") || w.includes("orbit")) {
+        v[0] += 0.85; v[8] += 0.7; v[15] += 0.6;
+      }
+      if (w.includes("comp") || w.includes("cyber") || w.includes("algo") || w.includes("neuro") || w.includes("bot")) {
+        v[1] += 0.9; v[2] += 0.7; v[14] += 0.8;
+      }
+      if (w.includes("king") || w.includes("queen") || w.includes("monarch") || w.includes("reg") || w.includes("crown") || w.includes("lord") || w.includes("empr")) {
+        v[3] += 0.95; v[4] += 0.85; v[9] += 0.7;
+      }
+      if (w.includes("bio") || w.includes("eco") || w.includes("tree") || w.includes("forest") || w.includes("plant") || w.includes("green") || w.includes("leaf")) {
+        v[5] += 0.9; v[22] += 0.8; v[11] += 0.3;
+      }
+      if (w.includes("aqua") || w.includes("hydro") || w.includes("ocean") || w.includes("river") || w.includes("water") || w.includes("sea")) {
+        v[7] += 0.95; v[13] += 0.6; v[22] += 0.5;
+      }
+
+      const ngrams = [];
+      for (let i = 0; i <= w.length - 3; i++) ngrams.push(w.substr(i, 3));
+      for (let i = 0; i <= w.length - 4; i++) ngrams.push(w.substr(i, 4));
+
+      for (const ng of ngrams) {
+        const h = fnv1a(ng);
+        const targetDim = h % dim;
+        const sign = ((h >> 8) & 1) === 0 ? 1.0 : -1.0;
+        v[targetDim] += sign * 0.35;
+      }
+
+      return normalizeVector(v);
+    }
+
+    function getBaseEmbedding(token) {
+      const clean = token.toLowerCase();
+      if (SEMANTIC_DICTIONARY[clean]) {
+        return normalizeVector([...SEMANTIC_DICTIONARY[clean]]);
+      }
+      return generateSubwordEmbedding(clean);
+    }
+
+    /**
+     * Vector Utilities
+     */
+    function dotProduct(u, v) {
+      let sum = 0;
+      for (let i = 0; i < u.length; i++) sum += u[i] * v[i];
+      return sum;
+    }
+
+    function vectorNorm(v) {
+      return Math.sqrt(dotProduct(v, v));
+    }
+
+    function normalizeVector(v) {
+      const norm = vectorNorm(v);
+      return norm > 1e-12 ? v.map(x => x / norm) : v;
+    }
+
+    function cosineSimilarity(u, v) {
+      const nu = vectorNorm(u);
+      const nv = vectorNorm(v);
+      if (nu === 0 || nv === 0) return 0;
+      return dotProduct(u, v) / (nu * nv);
+    }
+
+    function euclideanDistance(u, v) {
+      let sum = 0;
+      for (let i = 0; i < u.length; i++) {
+        const diff = u[i] - v[i];
+        sum += diff * diff;
+      }
+      return Math.sqrt(sum);
+    }
+
+    /**
+     * Determine semantic category and color for nodes (Vibrant jewel tones for bright canvas)
+     */
+    function getSemanticCategory(token, vector) {
+      if (vector[0] > 0.4 || vector[8] > 0.6) return { name: "Space", color: 0x7c3aed, hex: "#7c3aed", bgLight: "#f5f3ff", textLight: "#6d28d9" }; // violet
+      if (vector[1] > 0.4 || vector[2] > 0.5) return { name: "Tech / AI", color: 0x0284c7, hex: "#0284c7", bgLight: "#f0f9ff", textLight: "#0369a1" }; // sky/cyan
+      if (vector[3] > 0.4 || vector[4] > 0.5) return { name: "Royalty", color: 0xd97706, hex: "#d97706", bgLight: "#fffbeb", textLight: "#b45309" }; // amber
+      if (vector[5] > 0.4 || vector[7] > 0.5) return { name: "Nature", color: 0x059669, hex: "#059669", bgLight: "#ecfdf5", textLight: "#047857" }; // emerald
+      if (vector[9] > 0.4) return { name: "Human", color: 0xe11d48, hex: "#e11d48", bgLight: "#fff1f2", textLight: "#be123c" }; // rose
+      return { name: "General", color: 0x64748b, hex: "#64748b", bgLight: "#f8fafc", textLight: "#475569" }; // slate
+    }
+
+    /**
+     * =========================================================================
+     * 3. PIPELINE STATE & THEME STATE
+     * =========================================================================
+     */
+    const PipelineState = {
+      isBrightMode: true, // Default to Bright Mode!
+      rawText: "",
+      tokens: [],
+      vocabulary: [],
+      tokenToId: {},
+      frequencies: {},
+      embeddings: [],
+      pcaModel: {
+        mean: [],
+        eigenvectors: [],
+        varianceExplained: [0, 0, 0],
+        scale: 1.0,
+      },
+      projected3D: [],
+      
+      // Query word probe state
+      queryWord: null,
+      queryVector: null,
+      query3D: null,
+      queryMatches: [],
+      minSimThreshold: 0.40,
+      
+      // Visualization controls
+      autoRotate: false,
+      showLabels: true,
+      showAxes: true,
+    };
+
+    /**
+     * =========================================================================
+     * 4. TOKENIZATION & VOCABULARY GENERATION
+     * =========================================================================
+     */
+    function tokenizeText(text, foldCase = true) {
+      const clean = text.replace(/[\n\r\t]/g, " ");
+      const rawMatches = clean.match(/[\w']+|[.,!?;:]/g) || [];
+      const tokens = [];
+      for (const t of rawMatches) {
+        if (/^[.,!?;:]$/.test(t)) continue;
+        tokens.push(foldCase ? t.toLowerCase() : t);
+      }
+      return tokens;
+    }
+
+    function buildVocabulary(tokens) {
+      const vocab = [];
+      const tokenToId = {};
+      const frequencies = {};
+
+      for (const token of tokens) {
+        frequencies[token] = (frequencies[token] || 0) + 1;
+        if (!(token in tokenToId)) {
+          tokenToId[token] = vocab.length;
+          vocab.push(token);
+        }
+      }
+
+      return { vocab, tokenToId, frequencies };
+    }
+
+    function blendCooccurrenceVectors(tokens, vocab, baseEmbeddings, windowSize = 4, blendAlpha = 0.4) {
+      const N = vocab.length;
+      if (N <= 1 || blendAlpha <= 0) return baseEmbeddings;
+
+      const cooccur = Array.from({ length: N }, () => new Array(N).fill(0));
+      for (let i = 0; i < tokens.length; i++) {
+        const idA = vocab.indexOf(tokens[i]);
+        if (idA === -1) continue;
+        const start = Math.max(0, i - windowSize);
+        const end = Math.min(tokens.length - 1, i + windowSize);
+        for (let j = start; j <= end; j++) {
+          if (i === j) continue;
+          const idB = vocab.indexOf(tokens[j]);
+          if (idB !== -1) {
+            cooccur[idA][idB] += 1;
+          }
+        }
+      }
+
+      const blended = [];
+      for (let i = 0; i < N; i++) {
+        const base = [...baseEmbeddings[i]];
+        const contextSum = new Array(24).fill(0);
+        let totalCooccur = 0;
+
+        for (let j = 0; j < N; j++) {
+          const count = cooccur[i][j];
+          if (count > 0) {
+            totalCooccur += count;
+            for (let d = 0; d < 24; d++) {
+              contextSum[d] += count * baseEmbeddings[j][d];
+            }
+          }
+        }
+
+        if (totalCooccur > 0) {
+          const normContext = normalizeVector(contextSum);
+          const combined = [];
+          for (let d = 0; d < 24; d++) {
+            combined[d] = (1 - blendAlpha) * base[d] + blendAlpha * normContext[d];
+          }
+          blended.push(normalizeVector(combined));
+        } else {
+          blended.push(base);
+        }
+      }
+      return blended;
+    }
+
+    /**
+     * =========================================================================
+     * 5. PRINCIPAL COMPONENT ANALYSIS (PCA: 24D -> 3D)
+     * =========================================================================
+     */
+    function computePCA3D(X) {
+      const N = X.length;
+      const D = X[0].length;
+
+      const mean = new Array(D).fill(0);
+      for (let i = 0; i < N; i++) {
+        for (let j = 0; j < D; j++) mean[j] += X[i][j];
+      }
+      for (let j = 0; j < D; j++) mean[j] /= N;
+
+      const Xc = Array.from({ length: N }, () => new Array(D));
+      for (let i = 0; i < N; i++) {
+        for (let j = 0; j < D; j++) Xc[i][j] = X[i][j] - mean[j];
+      }
+
+      const C = Array.from({ length: D }, () => new Array(D).fill(0));
+      for (let j = 0; j < D; j++) {
+        for (let k = 0; k < D; k++) {
+          let sum = 0;
+          for (let i = 0; i < N; i++) sum += Xc[i][j] * Xc[i][k];
+          C[j][k] = sum / N;
+        }
+      }
+
+      let totalVariance = 0;
+      for (let j = 0; j < D; j++) totalVariance += C[j][j];
+      if (totalVariance <= 1e-12) totalVariance = 1.0;
+
+      const eigenvectors = [];
+      const eigenvalues = [];
+
+      for (let k = 0; k < 3; k++) {
+        let v = new Array(D).fill(0).map((_, idx) => Math.sin((idx + 1) * (k + 2)));
+        v = normalizeVector(v);
+
+        for (let iter = 0; iter < 50; iter++) {
+          const vNext = new Array(D).fill(0);
+          for (let r = 0; r < D; r++) {
+            let rowSum = 0;
+            for (let c = 0; c < D; c++) rowSum += C[r][c] * v[c];
+            vNext[r] = rowSum;
+          }
+
+          for (const prev of eigenvectors) {
+            const proj = dotProduct(vNext, prev);
+            for (let idx = 0; idx < D; idx++) vNext[idx] -= proj * prev[idx];
+          }
+
+          const norm = vectorNorm(vNext);
+          if (norm < 1e-12) break;
+          v = vNext.map(x => x / norm);
+        }
+
+        let lambda = 0;
+        for (let r = 0; r < D; r++) {
+          for (let c = 0; c < D; c++) {
+            lambda += v[r] * C[r][c] * v[c];
+          }
+        }
+
+        eigenvectors.push(v);
+        eigenvalues.push(Math.max(0, lambda));
+      }
+
+      const varianceExplained = eigenvalues.map(val => Math.min(100, (val / totalVariance) * 100));
+
+      const Y = [];
+      for (let i = 0; i < N; i++) {
+        const pt = [
+          dotProduct(Xc[i], eigenvectors[0]),
+          dotProduct(Xc[i], eigenvectors[1]),
+          dotProduct(Xc[i], eigenvectors[2])
+        ];
+        Y.push(pt);
+      }
+
+      let maxRadius = 0;
+      for (const pt of Y) {
+        for (const coord of pt) {
+          if (Math.abs(coord) > maxRadius) maxRadius = Math.abs(coord);
+        }
+      }
+      const scale = maxRadius > 1e-4 ? 36.0 / maxRadius : 1.0;
+      const Y_scaled = Y.map(pt => pt.map(c => c * scale));
+
+      return {
+        mean,
+        eigenvectors,
+        varianceExplained,
+        scale,
+        projected3D: Y_scaled
+      };
+    }
+
+    function projectVectorTo3D(vector, pcaModel) {
+      const { mean, eigenvectors, scale } = pcaModel;
+      const centered = vector.map((val, idx) => val - mean[idx]);
+      const x = dotProduct(centered, eigenvectors[0]) * scale;
+      const y = dotProduct(centered, eigenvectors[1]) * scale;
+      const z = dotProduct(centered, eigenvectors[2]) * scale;
+      return [x, y, z];
+    }
+
+    /**
+     * =========================================================================
+     * 6. THREE.JS 3D SCENE & ENGINE (Bright Mode Optimized)
+     * =========================================================================
+     */
+    let scene, camera, renderer, controls;
+    let nodeMeshGroup, labelSpriteGroup, linesGroup, queryBeaconGroup;
+    let starfieldPoints;
+    let raycaster, mouse;
+    let hoveredMesh = null;
+    let autoRotateAngle = 0;
+    let gridHelper, axesHelper;
+
+    function initThreeJS() {
+      const container = document.getElementById('three-container');
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+
+      // Scene
+      scene = new THREE.Scene();
+      const bgHex = PipelineState.isBrightMode ? 0xf8fafc : 0x070914;
+      scene.background = new THREE.Color(bgHex);
+      scene.fog = new THREE.FogExp2(bgHex, 0.005);
+
+      // Camera
+      camera = new THREE.PerspectiveCamera(45, width / height, 0.5, 1000);
+      camera.position.set(0, 32, 95);
+
+      // Renderer
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+      renderer.setSize(width, height);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = false;
+      container.appendChild(renderer.domElement);
+
+      // OrbitControls
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.07;
+      controls.rotateSpeed = 0.8;
+      controls.zoomSpeed = 1.0;
+      controls.panSpeed = 0.8;
+      controls.maxDistance = 250;
+      controls.minDistance = 5;
+
+      // Lights (Bright studio illumination)
+      const ambientLight = new THREE.AmbientLight(0xffffff, PipelineState.isBrightMode ? 0.95 : 0.75);
+      scene.add(ambientLight);
+
+      const dirLight1 = new THREE.DirectionalLight(0x6366f1, PipelineState.isBrightMode ? 0.75 : 0.9);
+      dirLight1.position.set(40, 60, 40);
+      scene.add(dirLight1);
+
+      const dirLight2 = new THREE.DirectionalLight(0x06b6d4, PipelineState.isBrightMode ? 0.65 : 0.6);
+      dirLight2.position.set(-40, -30, -40);
+      scene.add(dirLight2);
+
+      // Ambient Dust Particles
+      createStarfield();
+
+      // Groups
+      nodeMeshGroup = new THREE.Group();
+      labelSpriteGroup = new THREE.Group();
+      linesGroup = new THREE.Group();
+      queryBeaconGroup = new THREE.Group();
+
+      scene.add(nodeMeshGroup);
+      scene.add(labelSpriteGroup);
+      scene.add(linesGroup);
+      scene.add(queryBeaconGroup);
+
+      // Grid & Axes Helpers
+      createCoordinateAids();
+
+      // Raycaster for Hover & Click
+      raycaster = new THREE.Raycaster();
+      raycaster.params.Points.threshold = 1.0;
+      mouse = new THREE.Vector2(-999, -999);
+
+      // Event Listeners
+      renderer.domElement.addEventListener('mousemove', onMouseMove, false);
+      renderer.domElement.addEventListener('click', onMouseClick, false);
+      window.addEventListener('resize', onWindowResize, false);
+
+      const loading = document.getElementById('loading-overlay');
+      if (loading) loading.style.display = 'none';
+
+      animate();
+    }
+
+    function createStarfield() {
+      const count = 900;
+      const geometry = new THREE.BufferGeometry();
+      const positions = new Float32Array(count * 3);
+      for (let i = 0; i < count * 3; i += 3) {
+        positions[i] = (Math.random() - 0.5) * 350;
+        positions[i + 1] = (Math.random() - 0.5) * 350;
+        positions[i + 2] = (Math.random() - 0.5) * 350;
+      }
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      const material = new THREE.PointsMaterial({
+        color: PipelineState.isBrightMode ? 0x94a3b8 : 0x475569,
+        size: PipelineState.isBrightMode ? 0.75 : 0.9,
+        transparent: true,
+        opacity: PipelineState.isBrightMode ? 0.35 : 0.5
+      });
+      starfieldPoints = new THREE.Points(geometry, material);
+      scene.add(starfieldPoints);
+    }
+
+    function createCoordinateAids() {
+      if (gridHelper) scene.remove(gridHelper);
+      const gridMainColor = PipelineState.isBrightMode ? 0x6366f1 : 0x312e81;
+      const gridSecColor = PipelineState.isBrightMode ? 0xc7d2fe : 0x1e1b4b;
+      gridHelper = new THREE.GridHelper(80, 20, gridMainColor, gridSecColor);
+      gridHelper.position.y = -35;
+      gridHelper.visible = PipelineState.showAxes;
+      scene.add(gridHelper);
+
+      if (!axesHelper) {
+        axesHelper = new THREE.AxesHelper(45);
+        axesHelper.renderOrder = 1;
+        axesHelper.visible = PipelineState.showAxes;
+        scene.add(axesHelper);
+      }
+    }
+
+    /**
+     * Billboard Text Sprite Generator (Bright Mode / Dark Mode Adaptive)
+     */
+    function createTextSprite(text, isQuery = false) {
+      const canvas = document.createElement('canvas');
+      const scale = 2;
+      canvas.width = 256 * scale;
+      canvas.height = 70 * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(scale, scale);
+
+      const w = 256, h = 70, r = 14;
+      const isBright = PipelineState.isBrightMode;
+      
+      // Background Pill
+      if (isQuery) {
+        ctx.fillStyle = isBright ? 'rgba(254, 240, 138, 0.98)' : 'rgba(245, 158, 11, 0.95)';
+        ctx.strokeStyle = isBright ? '#d97706' : '#fef08a';
+        ctx.lineWidth = 2.5;
+      } else {
+        ctx.fillStyle = isBright ? 'rgba(255, 255, 255, 0.95)' : 'rgba(13, 17, 38, 0.85)';
+        ctx.strokeStyle = isBright ? 'rgba(148, 163, 184, 0.45)' : 'rgba(255, 255, 255, 0.2)';
+        ctx.lineWidth = 1.4;
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(10 + r, 10);
+      ctx.lineTo(w - 10 - r, 10);
+      ctx.quadraticCurveTo(w - 10, 10, w - 10, 10 + r);
+      ctx.lineTo(w - 10, h - 10 - r);
+      ctx.quadraticCurveTo(w - 10, h - 10, w - 10 - r, h - 10);
+      ctx.lineTo(10 + r, h - 10);
+      ctx.quadraticCurveTo(10, h - 10, 10, h - 10 - r);
+      ctx.lineTo(10, 10 + r);
+      ctx.quadraticCurveTo(10, 10, 10 + r, 10);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Text styling
+      ctx.font = isQuery ? 'bold 22px system-ui, sans-serif' : 'bold 20px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      if (isQuery) {
+        ctx.fillStyle = isBright ? '#78350f' : '#000000';
+      } else {
+        ctx.fillStyle = isBright ? '#0f172a' : '#ffffff';
+      }
+      ctx.fillText(text, w / 2, h / 2);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.minFilter = THREE.LinearFilter;
+      const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
+      const sprite = new THREE.Sprite(spriteMat);
+      sprite.scale.set(7.5, 2.0, 1.0);
+      return sprite;
+    }
+
+    /**
+     * Render Vocabulary Nodes in 3D Space
+     */
+    function render3DNodes() {
+      while (nodeMeshGroup.children.length > 0) {
+        const obj = nodeMeshGroup.children[0];
+        obj.geometry.dispose();
+        obj.material.dispose();
+        nodeMeshGroup.remove(obj);
+      }
+      while (labelSpriteGroup.children.length > 0) {
+        const spr = labelSpriteGroup.children[0];
+        spr.material.map.dispose();
+        spr.material.dispose();
+        labelSpriteGroup.remove(spr);
+      }
+
+      const { vocabulary, embeddings, projected3D, frequencies } = PipelineState;
+      const sphereGeo = new THREE.SphereGeometry(1.4, 24, 24);
+
+      for (let i = 0; i < vocabulary.length; i++) {
+        const token = vocabulary[i];
+        const vector = embeddings[i];
+        const [x, y, z] = projected3D[i];
+        const cat = getSemanticCategory(token, vector);
+
+        const mat = new THREE.MeshStandardMaterial({
+          color: cat.color,
+          roughness: 0.25,
+          metalness: 0.35,
+          emissive: cat.color,
+          emissiveIntensity: PipelineState.isBrightMode ? 0.15 : 0.3,
+        });
+
+        const mesh = new THREE.Mesh(sphereGeo, mat);
+        mesh.position.set(x, y, z);
+        mesh.userData = {
+          token,
+          id: i,
+          freq: frequencies[token] || 1,
+          category: cat.name,
+          colorHex: cat.hex,
+          vector,
+          coords: [x, y, z]
+        };
+        nodeMeshGroup.add(mesh);
+
+        const sprite = createTextSprite(token, false);
+        sprite.position.set(x, y + 2.8, z);
+        sprite.visible = PipelineState.showLabels;
+        labelSpriteGroup.add(sprite);
+      }
+    }
+
+    /**
+     * =========================================================================
+     * 7. WORD SIMILARITY & 3D PROBE ENGINE
+     * =========================================================================
+     */
+    function testWordSimilarity() {
+      const input = document.getElementById('query-word-input');
+      const word = input.value.trim().toLowerCase();
+      if (!word) {
+        alert("Please enter a word to test similarity.");
+        return;
+      }
+
+      if (PipelineState.vocabulary.length === 0) {
+        alert("Please run the pipeline first with a text corpus.");
+        return;
+      }
+
+      const queryVec = getBaseEmbedding(word);
+      const query3D = projectVectorTo3D(queryVec, PipelineState.pcaModel);
+
+      PipelineState.queryWord = word;
+      PipelineState.queryVector = queryVec;
+      PipelineState.query3D = query3D;
+
+      const matches = [];
+      for (let i = 0; i < PipelineState.vocabulary.length; i++) {
+        const token = PipelineState.vocabulary[i];
+        const targetVec = PipelineState.embeddings[i];
+        const sim = cosineSimilarity(queryVec, targetVec);
+        const dist = euclideanDistance(queryVec, targetVec);
+        const angleDeg = Math.acos(Math.max(-1, Math.min(1, sim))) * (180 / Math.PI);
+
+        matches.push({
+          token,
+          id: i,
+          similarity: sim,
+          distance: dist,
+          angle: angleDeg,
+          coords: PipelineState.projected3D[i],
+          vector: targetVec
+        });
+      }
+
+      matches.sort((a, b) => b.similarity - a.similarity);
+      PipelineState.queryMatches = matches;
+
+      renderSimilarityResults();
+      render3DQueryProbe();
+
+      const badge = document.getElementById('active-query-badge');
+      const badgeName = document.getElementById('query-badge-name');
+      badge.classList.remove('hidden');
+      badgeName.textContent = `"${word}"`;
+
+      flyCameraTo(new THREE.Vector3(query3D[0], query3D[1], query3D[2]), 45);
+    }
+
+    function setQueryWord(word) {
+      document.getElementById('query-word-input').value = word;
+      testWordSimilarity();
+    }
+
+    function renderSimilarityResults() {
+      const container = document.getElementById('similarity-results-container');
+      const matches = PipelineState.queryMatches;
+      const threshold = PipelineState.minSimThreshold;
+
+      if (!matches || matches.length === 0) {
+        container.innerHTML = `<div class="text-center py-6 text-slate-400 text-xs">No similarity results yet.</div>`;
+        return;
+      }
+
+      let html = '';
+      matches.slice(0, 10).forEach((item, index) => {
+        const simPct = Math.round(item.similarity * 100);
+        const isAboveThresh = item.similarity >= threshold;
+        
+        let colorText = 'text-emerald-700';
+        let barColor = 'bg-emerald-500';
+        if (item.similarity < 0.4) {
+          colorText = 'text-slate-600';
+          barColor = 'bg-slate-400';
+        } else if (item.similarity < 0.7) {
+          colorText = 'text-amber-700';
+          barColor = 'bg-amber-500';
+        }
+
+        html += `
+          <div class="p-2.5 rounded-xl ${isAboveThresh ? 'bg-white border-slate-200 shadow-xs' : 'bg-slate-50 border-slate-200 opacity-60'} border flex flex-col gap-1.5 transition-all hover:border-amber-400 group">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="w-5 h-5 rounded-md bg-slate-100 text-[10px] font-mono flex items-center justify-center text-slate-600 font-bold">#${index + 1}</span>
+                <span class="font-bold text-xs text-slate-900 group-hover:text-amber-800 font-mono">${item.token}</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="font-mono text-xs font-extrabold ${colorText}">
+                  ${(item.similarity >= 0 ? '+' : '') + item.similarity.toFixed(3)} (${simPct}%)
+                </span>
+                <button onclick="focusOnPair(${item.id})" title="Fly camera to this word in 3D" 
+                  class="px-2 py-0.5 rounded bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 text-[10px] font-mono transition-all border border-indigo-200 font-semibold">
+                  Focus
+                </button>
+              </div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden border border-slate-200/80">
+              <div class="h-1.5 rounded-full ${barColor} transition-all duration-500" 
+                style="width: ${Math.max(0, Math.min(100, simPct))}%"></div>
+            </div>
+
+            <!-- Metadata Metrics -->
+            <div class="flex items-center justify-between text-[10px] text-slate-500 font-mono font-medium">
+              <span>Angle: <strong class="text-slate-700">${item.angle.toFixed(1)}°</strong></span>
+              <span>L2 Dist: <strong class="text-slate-700">${item.distance.toFixed(3)}</strong></span>
+              <span>ID: ${item.id}</span>
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
+
+    function render3DQueryProbe() {
+      while (linesGroup.children.length > 0) {
+        const obj = linesGroup.children[0];
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) obj.material.dispose();
+        linesGroup.remove(obj);
+      }
+      while (queryBeaconGroup.children.length > 0) {
+        const obj = queryBeaconGroup.children[0];
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) obj.material.dispose();
+        queryBeaconGroup.remove(obj);
+      }
+
+      if (!PipelineState.query3D) return;
+
+      const [qx, qy, qz] = PipelineState.query3D;
+      const qPos = new THREE.Vector3(qx, qy, qz);
+
+      // Query Node Mesh (Vibrant Golden Icosahedron)
+      const beaconGeo = new THREE.IcosahedronGeometry(2.2, 2);
+      const beaconMat = new THREE.MeshStandardMaterial({
+        color: 0xd97706,
+        emissive: 0xf59e0b,
+        emissiveIntensity: 0.9,
+        roughness: 0.1,
+        metalness: 0.4
+      });
+      const beaconMesh = new THREE.Mesh(beaconGeo, beaconMat);
+      beaconMesh.position.copy(qPos);
+      beaconMesh.name = "queryBeacon";
+      queryBeaconGroup.add(beaconMesh);
+
+      // Outer Halo Ring
+      const ringGeo = new THREE.RingGeometry(2.8, 3.2, 32);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: 0xf59e0b,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.85
+      });
+      const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+      ringMesh.position.copy(qPos);
+      ringMesh.name = "queryRing";
+      queryBeaconGroup.add(ringMesh);
+
+      // Billboard Badge for Query Word
+      const sprite = createTextSprite(`⭐ [TEST]: ${PipelineState.queryWord}`, true);
+      sprite.position.set(qx, qy + 4.2, qz);
+      queryBeaconGroup.add(sprite);
+
+      // 3D Connecting Lines
+      const threshold = PipelineState.minSimThreshold;
+      const matches = PipelineState.queryMatches;
+
+      matches.forEach((item) => {
+        if (item.similarity < threshold) return;
+
+        const [tx, ty, tz] = item.coords;
+        const tPos = new THREE.Vector3(tx, ty, tz);
+
+        let lineColor = 0x059669; // emerald
+        if (item.similarity < 0.45) lineColor = 0x94a3b8; // slate
+        else if (item.similarity < 0.70) lineColor = 0xd97706; // amber
+
+        const lineGeo = new THREE.BufferGeometry().setFromPoints([qPos, tPos]);
+        const lineMat = new THREE.LineBasicMaterial({
+          color: lineColor,
+          transparent: true,
+          opacity: Math.max(0.4, item.similarity * 0.95),
+          linewidth: 2,
+        });
+
+        const line = new THREE.Line(lineGeo, lineMat);
+        linesGroup.add(line);
+      });
+    }
+
+    function updateSimThreshold(val) {
+      PipelineState.minSimThreshold = parseInt(val) / 100;
+      document.getElementById('sim-threshold-val').textContent = `${val}%`;
+      renderSimilarityResults();
+      render3DQueryProbe();
+    }
+
+    function clearQueryProbe() {
+      PipelineState.queryWord = null;
+      PipelineState.queryVector = null;
+      PipelineState.query3D = null;
+      PipelineState.queryMatches = [];
+
+      while (linesGroup.children.length > 0) linesGroup.remove(linesGroup.children[0]);
+      while (queryBeaconGroup.children.length > 0) queryBeaconGroup.remove(queryBeaconGroup.children[0]);
+
+      document.getElementById('active-query-badge').classList.add('hidden');
+      document.getElementById('query-word-input').value = '';
+      renderSimilarityResults();
+    }
+
+    function addWordToVocabularyPermanently() {
+      const input = document.getElementById('query-word-input');
+      const word = input.value.trim().toLowerCase();
+      if (!word) return;
+
+      if (PipelineState.vocabulary.includes(word)) {
+        alert(`Word "${word}" already exists in the vocabulary!`);
+        return;
+      }
+
+      PipelineState.vocabulary.push(word);
+      PipelineState.tokenToId[word] = PipelineState.vocabulary.length - 1;
+      PipelineState.frequencies[word] = 1;
+
+      const vec = getBaseEmbedding(word);
+      PipelineState.embeddings.push(vec);
+
+      const pca = computePCA3D(PipelineState.embeddings);
+      PipelineState.pcaModel = pca;
+      PipelineState.projected3D = pca.projected3D;
+
+      render3DNodes();
+      updateVocabUI();
+      renderEmbeddingMatrix();
+      clearQueryProbe();
+
+      alert(`Added "${word}" to vocabulary model! 3D Space updated.`);
+    }
+
+    /**
+     * =========================================================================
+     * 8. VECTOR ANALOGY ENGINE (Word2Vec)
+     * =========================================================================
+     */
+    function setAnalogy(a, b, c) {
+      document.getElementById('analogy-a').value = a;
+      document.getElementById('analogy-b').value = b;
+      document.getElementById('analogy-c').value = c;
+      computeVectorAnalogy();
+    }
+
+    function computeVectorAnalogy() {
+      const a = document.getElementById('analogy-a').value.trim().toLowerCase();
+      const b = document.getElementById('analogy-b').value.trim().toLowerCase();
+      const c = document.getElementById('analogy-c').value.trim().toLowerCase();
+
+      const vecA = getBaseEmbedding(a);
+      const vecB = getBaseEmbedding(b);
+      const vecC = getBaseEmbedding(c);
+
+      const targetVec = new Array(24).fill(0);
+      for (let i = 0; i < 24; i++) {
+        targetVec[i] = vecA[i] - vecB[i] + vecC[i];
+      }
+      const normTarget = normalizeVector(targetVec);
+
+      const candidateTokens = [...new Set([...PipelineState.vocabulary, ...Object.keys(SEMANTIC_DICTIONARY)])];
+      const scores = [];
+
+      for (const token of candidateTokens) {
+        if (token === a || token === b || token === c) continue;
+        const vec = getBaseEmbedding(token);
+        const sim = cosineSimilarity(normTarget, vec);
+        scores.push({ token, similarity: sim });
+      }
+
+      scores.sort((x, y) => y.similarity - x.similarity);
+
+      const resultBox = document.getElementById('analogy-result-box');
+      const matchesDiv = document.getElementById('analogy-matches');
+      resultBox.classList.remove('hidden');
+
+      let html = '';
+      scores.slice(0, 5).forEach((item, idx) => {
+        html += `
+          <div class="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 shadow-2xs">
+            <span class="flex items-center gap-1.5">
+              <span class="text-indigo-600 font-extrabold">#${idx + 1}</span>
+              <span class="text-slate-900 font-bold">${item.token}</span>
+            </span>
+            <span class="text-emerald-700 font-mono font-bold">${(item.similarity * 100).toFixed(1)}%</span>
+          </div>
+        `;
+      });
+      matchesDiv.innerHTML = html;
+    }
+
+    /**
+     * =========================================================================
+     * 9. UI UPDATES, TABLES & HEATMAP RENDERING
+     * =========================================================================
+     */
+    function updateVocabUI() {
+      const { vocabulary } = PipelineState;
+
+      document.getElementById('header-token-count').textContent = PipelineState.tokens.length;
+      document.getElementById('header-vocab-count').textContent = vocabulary.length;
+
+      const streamContainer = document.getElementById('token-stream-container');
+      streamContainer.innerHTML = '';
+      PipelineState.tokens.forEach((t, idx) => {
+        const id = PipelineState.tokenToId[t];
+        const span = document.createElement('span');
+        span.className = 'px-2 py-0.5 rounded-lg bg-white text-slate-800 border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50 hover:text-indigo-700 cursor-pointer transition-all shadow-2xs font-semibold';
+        span.title = `Token ID: ${id} | Pos: ${idx}`;
+        span.textContent = t;
+        span.onclick = () => focusOnPair(id);
+        streamContainer.appendChild(span);
+      });
+
+      renderVocabTable(vocabulary);
+    }
+
+    function renderVocabTable(vocabList) {
+      const tbody = document.getElementById('vocab-table-body');
+      tbody.innerHTML = '';
+
+      vocabList.forEach((token) => {
+        const id = PipelineState.tokenToId[token];
+        const freq = PipelineState.frequencies[token] || 1;
+        const vec = PipelineState.embeddings[id];
+        const cat = getSemanticCategory(token, vec);
+
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-indigo-50/50 transition-colors';
+        tr.innerHTML = `
+          <td class="py-1.5 px-3 font-mono text-slate-500 font-semibold">${id}</td>
+          <td class="py-1.5 px-3 font-bold text-slate-900">${token}</td>
+          <td class="py-1.5 px-2 text-center text-indigo-700 font-mono font-bold">${freq}</td>
+          <td class="py-1.5 px-2">
+            <span class="px-2 py-0.5 rounded-full text-[9px] font-bold" style="background-color: ${cat.bgLight}; color: ${cat.textLight}; border: 1px solid ${cat.hex}40">
+              ${cat.name}
+            </span>
+          </td>
+          <td class="py-1.5 px-3 text-right">
+            <button onclick="focusOnPair(${id})" class="px-2 py-0.5 rounded bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 text-[10px] transition-all border border-indigo-200 font-semibold">
+              Inspect
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function filterVocabTable() {
+      const q = document.getElementById('vocab-search').value.toLowerCase();
+      const filtered = PipelineState.vocabulary.filter(w => w.toLowerCase().includes(q));
+      renderVocabTable(filtered);
+    }
+
+    function renderEmbeddingMatrix() {
+      const container = document.getElementById('embedding-matrix-container');
+      const { vocabulary, embeddings, pcaModel } = PipelineState;
+
+      const [v1, v2, v3] = pcaModel.varianceExplained;
+      document.getElementById('pca-var-pc1').textContent = `${v1.toFixed(1)}%`;
+      document.getElementById('pca-var-pc2').textContent = `${v2.toFixed(1)}%`;
+      document.getElementById('pca-var-pc3').textContent = `${v3.toFixed(1)}%`;
+
+      let tableHtml = `
+        <table class="w-full text-center border-collapse">
+          <thead>
+            <tr class="text-slate-600 border-b border-slate-200 bg-slate-50 font-bold">
+              <th class="py-1 px-2 text-left sticky left-0 bg-slate-100">Token</th>
+              ${DIM_NAMES.map((d, idx) => `<th class="py-1 px-1.5" title="${d}">d${idx}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      embeddings.forEach((vec, rowIdx) => {
+        const token = vocabulary[rowIdx];
+        tableHtml += `
+          <tr class="border-b border-slate-100 hover:bg-slate-50/70">
+            <td class="py-1 px-2 text-left font-bold text-slate-900 sticky left-0 bg-white border-r border-slate-100">${token}</td>
+            ${vec.map((val, colIdx) => {
+              let bg = 'rgba(241, 245, 249, 0.7)';
+              let textColor = '#475569';
+              if (val > 0.05) {
+                const alpha = Math.min(1, val * 0.9);
+                bg = `rgba(16, 185, 129, ${alpha * 0.4})`;
+                textColor = '#065f46';
+              } else if (val < -0.05) {
+                const alpha = Math.min(1, Math.abs(val) * 0.9);
+                bg = `rgba(59, 130, 246, ${alpha * 0.4})`;
+                textColor = '#1e40af';
+              }
+              return `<td class="p-1 cursor-pointer transition-all hover:scale-125 font-semibold" style="background-color: ${bg}; color: ${textColor};" title="${token} | ${DIM_NAMES[colIdx]}: ${val.toFixed(3)}">${val.toFixed(2)}</td>`;
+            }).join('')}
+          </tr>
+        `;
+      });
+
+      tableHtml += `</tbody></table>`;
+      container.innerHTML = tableHtml;
+    }
+
+    /**
+     * =========================================================================
+     * 10. MAIN PIPELINE EXECUTION
+     * =========================================================================
+     */
+    function processPipeline() {
+      const text = document.getElementById('text-input').value.trim();
+      if (!text) {
+        alert("Please enter some text or pick a preset.");
+        return;
+      }
+
+      const foldCase = document.getElementById('lowercase-check').checked;
+      const blendVal = parseInt(document.getElementById('cooccur-slider').value) / 100;
+
+      const tokens = tokenizeText(text, foldCase);
+      if (tokens.length === 0) {
+        alert("No valid tokens found.");
+        return;
+      }
+
+      const { vocab, tokenToId, frequencies } = buildVocabulary(tokens);
+      const baseEmbeddings = vocab.map(t => getBaseEmbedding(t));
+      const blendedEmbeddings = blendCooccurrenceVectors(tokens, vocab, baseEmbeddings, 4, blendVal);
+      const pca = computePCA3D(blendedEmbeddings);
+
+      PipelineState.rawText = text;
+      PipelineState.tokens = tokens;
+      PipelineState.vocabulary = vocab;
+      PipelineState.tokenToId = tokenToId;
+      PipelineState.frequencies = frequencies;
+      PipelineState.embeddings = blendedEmbeddings;
+      PipelineState.pcaModel = pca;
+      PipelineState.projected3D = pca.projected3D;
+
+      render3DNodes();
+      updateVocabUI();
+      renderEmbeddingMatrix();
+      clearQueryProbe();
+
+      resetCameraView();
+    }
+
+    function loadPreset(name) {
+      if (!PRESETS[name]) return;
+      const text = PRESETS[name];
+      document.getElementById('text-input').value = text;
+      updateTextCounters(text);
+      processPipeline();
+    }
+
+    function updateTextCounters(text) {
+      document.getElementById('char-count').textContent = text.length;
+      const words = text.trim().split(/\s+/).filter(Boolean);
+      document.getElementById('word-count').textContent = words.length;
+    }
+
+    /**
+     * =========================================================================
+     * 11. THEME TOGGLE (BRIGHT MODE / DARK MODE)
+     * =========================================================================
+     */
+    function toggleTheme() {
+      PipelineState.isBrightMode = !PipelineState.isBrightMode;
+      applyTheme();
+    }
+
+    function applyTheme() {
+      const isBright = PipelineState.isBrightMode;
+      const htmlEl = document.documentElement;
+      const iconEl = document.getElementById('theme-icon');
+      const textEl = document.getElementById('theme-text');
+
+      if (isBright) {
+        htmlEl.classList.remove('dark');
+        htmlEl.classList.add('light');
+        iconEl.textContent = '☀️';
+        textEl.textContent = 'Bright Mode';
+        if (scene) {
+          scene.background.setHex(0xf8fafc);
+          scene.fog.color.setHex(0xf8fafc);
+        }
+      } else {
+        htmlEl.classList.remove('light');
+        htmlEl.classList.add('dark');
+        iconEl.textContent = '🌙';
+        textEl.textContent = 'Dark Mode';
+        if (scene) {
+          scene.background.setHex(0x070914);
+          scene.fog.color.setHex(0x070914);
+        }
+      }
+
+      if (starfieldPoints) {
+        starfieldPoints.material.color.setHex(isBright ? 0x94a3b8 : 0x475569);
+        starfieldPoints.material.opacity = isBright ? 0.35 : 0.5;
+      }
+
+      createCoordinateAids();
+
+      if (PipelineState.vocabulary.length > 0) {
+        render3DNodes();
+        if (PipelineState.query3D) {
+          render3DQueryProbe();
+        }
+      }
+    }
+
+    /**
+     * =========================================================================
+     * 12. INTERACTION: RAYCASTING, HOVER & CAMERA ANIMATIONS
+     * =========================================================================
+     */
+    function onMouseMove(event) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(nodeMeshGroup.children);
+      const tooltip = document.getElementById('hover-tooltip');
+
+      if (intersects.length > 0) {
+        const hit = intersects[0].object;
+        renderer.domElement.style.cursor = 'pointer';
+
+        if (hoveredMesh !== hit) {
+          if (hoveredMesh) hoveredMesh.scale.set(1, 1, 1);
+          hoveredMesh = hit;
+          hoveredMesh.scale.set(1.4, 1.4, 1.4);
+        }
+
+        const data = hit.userData;
+        const [x, y, z] = data.coords;
+
+        tooltip.innerHTML = `
+          <div class="flex items-center justify-between pb-1.5 mb-1 border-b border-slate-200">
+            <span class="font-extrabold text-sm text-slate-900">${data.token}</span>
+            <span class="px-2 py-0.5 rounded text-[9px] font-bold" style="color: ${data.colorHex}; background: ${data.colorHex}20; border: 1px solid ${data.colorHex}40">
+              ${data.category}
+            </span>
+          </div>
+          <div class="space-y-0.5 text-slate-600 text-[11px]">
+            <div>Token ID: <span class="font-bold text-indigo-700 font-mono">${data.id}</span></div>
+            <div>Corpus Freq: <span class="font-bold text-indigo-700 font-mono">${data.freq}</span></div>
+            <div>3D Pos: <span class="font-mono text-slate-500 font-medium">[${x.toFixed(1)}, ${y.toFixed(1)}, ${z.toFixed(1)}]</span></div>
+          </div>
+        `;
+        tooltip.style.left = `${event.clientX - rect.left + 15}px`;
+        tooltip.style.top = `${event.clientY - rect.top + 15}px`;
+        tooltip.classList.remove('hidden');
+      } else {
+        renderer.domElement.style.cursor = 'default';
+        if (hoveredMesh) {
+          hoveredMesh.scale.set(1, 1, 1);
+          hoveredMesh = null;
+        }
+        tooltip.classList.add('hidden');
+      }
+    }
+
+    function onMouseClick() {
+      if (hoveredMesh) {
+        const data = hoveredMesh.userData;
+        focusOnPair(data.id);
+      }
+    }
+
+    function focusOnPair(tokenId) {
+      if (!PipelineState.projected3D[tokenId]) return;
+      const [x, y, z] = PipelineState.projected3D[tokenId];
+      flyCameraTo(new THREE.Vector3(x, y, z), 28);
+    }
+
+    function flyCameraTo(targetPos, distance = 35) {
+      const startPos = camera.position.clone();
+      const startTarget = controls.target.clone();
+      const endTarget = targetPos.clone();
+      const offset = new THREE.Vector3(12, 16, distance);
+      const endPos = endTarget.clone().add(offset);
+
+      let progress = 0;
+      const startTime = performance.now();
+      const duration = 800;
+
+      function step(now) {
+        const elapsed = now - startTime;
+        progress = Math.min(1, elapsed / duration);
+        const ease = progress < 0.5 ? 4 * progress * progress * progress : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+
+        camera.position.lerpVectors(startPos, endPos, ease);
+        controls.target.lerpVectors(startTarget, endTarget, ease);
+        controls.update();
+
+        if (progress < 1) {
+          requestAnimationFrame(step);
+        }
+      }
+      requestAnimationFrame(step);
+    }
+
+    function resetCameraView() {
+      flyCameraTo(new THREE.Vector3(0, 0, 0), 85);
+    }
+
+    function toggleAutoRotate() {
+      PipelineState.autoRotate = !PipelineState.autoRotate;
+      const btn = document.getElementById('btn-toggle-rotate');
+      if (PipelineState.autoRotate) {
+        btn.classList.add('bg-indigo-600', 'text-white');
+        btn.classList.remove('bg-slate-100', 'text-slate-700');
+      } else {
+        btn.classList.remove('bg-indigo-600', 'text-white');
+        btn.classList.add('bg-slate-100', 'text-slate-700');
+      }
+    }
+
+    function toggleLabels() {
+      PipelineState.showLabels = !PipelineState.showLabels;
+      const btn = document.getElementById('btn-toggle-labels');
+      if (PipelineState.showLabels) {
+        btn.classList.add('bg-indigo-600', 'text-white');
+        btn.classList.remove('bg-slate-100', 'text-slate-700');
+      } else {
+        btn.classList.remove('bg-indigo-600', 'text-white');
+        btn.classList.add('bg-slate-100', 'text-slate-700');
+      }
+      labelSpriteGroup.children.forEach(spr => spr.visible = PipelineState.showLabels);
+    }
+
+    function toggleAxes() {
+      PipelineState.showAxes = !PipelineState.showAxes;
+      const btn = document.getElementById('btn-toggle-axes');
+      if (PipelineState.showAxes) {
+        btn.classList.add('bg-indigo-600', 'text-white');
+        btn.classList.remove('bg-slate-100', 'text-slate-700');
+      } else {
+        btn.classList.remove('bg-indigo-600', 'text-white');
+        btn.classList.add('bg-slate-100', 'text-slate-700');
+      }
+      gridHelper.visible = PipelineState.showAxes;
+      axesHelper.visible = PipelineState.showAxes;
+    }
+
+    function onWindowResize() {
+      const container = document.getElementById('three-container');
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height);
+    }
+
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('bg-white', 'text-indigo-700', 'shadow-sm', 'border');
+        btn.classList.add('text-slate-600');
+      });
+      document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.add('hidden'));
+
+      const activeBtn = document.getElementById(`tab-btn-${tabName}`);
+      const activePane = document.getElementById(`tab-content-${tabName}`);
+
+      activeBtn.classList.add('bg-white', 'text-indigo-700', 'shadow-sm', 'border');
+      activeBtn.classList.remove('text-slate-600');
+      activePane.classList.remove('hidden');
+    }
+
+    /**
+     * =========================================================================
+     * 13. THREE.JS ANIMATION LOOP
+     * =========================================================================
+     */
+    function animate(time) {
+      requestAnimationFrame(animate);
+
+      if (PipelineState.autoRotate) {
+        autoRotateAngle += 0.003;
+        const radius = Math.hypot(camera.position.x, camera.position.z);
+        camera.position.x = Math.sin(autoRotateAngle) * radius;
+        camera.position.z = Math.cos(autoRotateAngle) * radius;
+        camera.lookAt(controls.target);
+      }
+
+      const ring = queryBeaconGroup.getObjectByName("queryRing");
+      if (ring) {
+        const pulse = 1.0 + 0.3 * Math.sin((time || 0) * 0.005);
+        ring.scale.set(pulse, pulse, pulse);
+        ring.rotation.z += 0.01;
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    /**
+     * =========================================================================
+     * 14. INITIALIZATION ON PAGE LOAD
+     * =========================================================================
+     */
+    window.addEventListener('DOMContentLoaded', () => {
+      // 1. Initialize 3D WebGL Engine
+      initThreeJS();
+
+      // 2. Setup text input counters & listeners
+      const textInput = document.getElementById('text-input');
+      textInput.addEventListener('input', () => updateTextCounters(textInput.value));
+
+      document.getElementById('cooccur-slider').addEventListener('input', (e) => {
+        document.getElementById('cooccur-val').textContent = `${e.target.value}%`;
+      });
+
+      // 3. Load default cosmic preset to bootstrap pipeline immediately
+      loadPreset('cosmic');
+    });
+  </script>
+
+</body>
+</html>
